@@ -7,17 +7,21 @@
 #include <string>
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
+
+
 moveit_servo_ur::moveit_servo_ur() : Node("moveit_servo_ur")
 {    /////////////////////// Nazar added Moveit part ///////////////////   
      
     geometry_msgs::msg::Pose msg;
-    msg.orientation.x = 0.0;
-    msg.orientation.y = 1.0;
-    msg.orientation.z = 0.0;
-    msg.orientation.w = 0.0;
+    tf2::Quaternion q;
+    q.setRPY(0.0, M_PI , M_PI);
+    msg.orientation.x = q.x();
+    msg.orientation.y = q.y();
+    msg.orientation.z = q.z();
+    msg.orientation.w = q.w();
     msg.position.x = 0.3;
     msg.position.y = 0.2;
-    msg.position.z = 0.4;
+    msg.position.z = 0.3;
     auto const target_pose_1 = msg;
 
 
@@ -25,8 +29,18 @@ moveit_servo_ur::moveit_servo_ur() : Node("moveit_servo_ur")
     move_group_interface = std::make_unique<moveit::planning_interface::MoveGroupInterface>(std::shared_ptr<rclcpp::Node>(this), "ur_manipulator");
     move_group_interface->setPlanningTime(10.0);
 
-    
-
+    std::string frame_id = move_group_interface->getPlanningFrame(); 
+    // Generate a table collision object based on the lab task
+      auto col_object_backWall = generateCollisionObject( 2.4, 0.04, 1.0, 0.85, -0.30, 0.5, frame_id, "backWall");
+      auto col_object_sideWall = generateCollisionObject( 0.04, 1.2, 1.0, -0.30, 0.25, 0.5, frame_id, "sideWall");
+      auto col_object_table = generateCollisionObject( 2.4, 1.2, 0.04, 0.85, 0.25, -0.03, frame_id, "table");
+      auto col_object_ceiling = generateCollisionObject( 2.4, 1.2, 0.04, 0.85, 0.25, 1.0, frame_id, "ceiling");
+    moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
+    // Apply table as a collision object
+      planning_scene_interface.applyCollisionObject(col_object_backWall);
+      planning_scene_interface.applyCollisionObject(col_object_sideWall);
+      planning_scene_interface.applyCollisionObject(col_object_table);
+      planning_scene_interface.applyCollisionObject(col_object_ceiling);
     auto success = false;
     moveit::planning_interface::MoveGroupInterface::Plan planMessage;     
 
@@ -62,7 +76,6 @@ moveit_servo_ur::moveit_servo_ur() : Node("moveit_servo_ur")
     timer_routine_->reset();
     
 }
-
 
 void moveit_servo_ur::request_activate_servo() {
     auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
@@ -126,7 +139,7 @@ void moveit_servo_ur::routine_callback()
             request->activate_controllers.push_back("joint_trajectory_controller");
             request->timeout.sec = 2.0;
             auto result = client_switch_controller_->async_send_request(request, std::bind(&moveit_servo_ur::client_switch_controller_response_callback, this, std::placeholders::_1));
-    
+            std::cout<<"finished switch back controller" << std::endl;
             rclcpp::shutdown();
             return;
         }
