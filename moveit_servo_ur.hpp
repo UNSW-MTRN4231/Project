@@ -10,6 +10,9 @@
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include "std_msgs/msg/string.hpp"
 #include <string>
+#include "tf2/exceptions.h"
+#include "tf2_ros/transform_listener.h"
+#include "tf2_ros/buffer.h"
 
 auto generateCollisionObject(float sx,float sy, float sz, float x, float y, float z, std::string frame_id, std::string id) {
   moveit_msgs::msg::CollisionObject collision_object;
@@ -47,6 +50,7 @@ private:
 
     bool switched_controllers_flag = false;
     bool actived_servo_flag = false;   
+    bool goal_reached = false; //Nazar added
     
     void wait_for_services();
     void routine_callback();
@@ -56,15 +60,21 @@ private:
 
     void client_servo_response_callback(rclcpp::Client<std_srvs::srv::Trigger>::SharedFuture future);
     void client_switch_controller_response_callback(rclcpp::Client<controller_manager_msgs::srv::SwitchController>::SharedFuture future);
-
+    // Nazar added
+    void bottlePoseCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+    
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_servo_trigger_;
     rclcpp::Client<controller_manager_msgs::srv::SwitchController>::SharedPtr client_switch_controller_;
     rclcpp::Publisher<control_msgs::msg::JointJog>::SharedPtr joint_cmd_pub_;
     rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr twist_cmd_pub_;
     
     rclcpp::TimerBase::SharedPtr timer_routine_;
-    
+    //Nazar added    
     std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_interface;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
+    std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr bottle_pose_sub_;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_publisher_;
 };
 
 #endif // MOVEIT_SERVO_UR_HPP

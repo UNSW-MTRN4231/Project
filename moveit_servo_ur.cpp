@@ -11,19 +11,11 @@
 
 moveit_servo_ur::moveit_servo_ur() : Node("moveit_servo_ur")
 {    /////////////////////// Nazar added Moveit part ///////////////////   
-     
-    geometry_msgs::msg::Pose msg;
-    tf2::Quaternion q;
-    q.setRPY(0.0, M_PI , M_PI);
-    msg.orientation.x = q.x();
-    msg.orientation.y = q.y();
-    msg.orientation.z = q.z();
-    msg.orientation.w = q.w();
-    msg.position.x = 0.3;
-    msg.position.y = 0.2;
-    msg.position.z = 0.3;
-    auto const target_pose_1 = msg;
-
+// Create a subscriber for the "bottle_pose" topic
+    bottle_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
+        "bottle_pos", 10, std::bind(&moveit_servo_ur::bottlePoseCallback, this, std::placeholders::_1));
+    marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("ball_marker", 10); // Create a marker publisher
+    
 
     // Create the MoveIt MoveGroup Interface
     move_group_interface = std::make_unique<moveit::planning_interface::MoveGroupInterface>(std::shared_ptr<rclcpp::Node>(this), "ur_manipulator");
@@ -41,21 +33,7 @@ moveit_servo_ur::moveit_servo_ur() : Node("moveit_servo_ur")
       planning_scene_interface.applyCollisionObject(col_object_sideWall);
       planning_scene_interface.applyCollisionObject(col_object_table);
       planning_scene_interface.applyCollisionObject(col_object_ceiling);
-    auto success = false;
-    moveit::planning_interface::MoveGroupInterface::Plan planMessage;     
 
-    //Plan movement to point 1
-    move_group_interface->setPoseTarget(target_pose_1);
-    success = static_cast<bool>(move_group_interface->plan(planMessage));
-
-    //Execute movement to point 1
-    if (success) {
-    move_group_interface->execute(planMessage);    
-    } else {
-    std::cout<<"fail moving to point 1" << std::endl;
-    }
-    
-    std::cout<<"finished moving to point 1" << std::endl;  
     
     /////////////////////// Nazar added Moveit part Ends //////////////////////
 
@@ -67,14 +45,7 @@ moveit_servo_ur::moveit_servo_ur() : Node("moveit_servo_ur")
     twist_cmd_pub_ = create_publisher<geometry_msgs::msg::TwistStamped>("servo_node/delta_twist_cmds", 10);
     
     timer_routine_ = this->create_wall_timer(std::chrono::milliseconds(34), std::bind(&moveit_servo_ur::routine_callback, this));
-    timer_routine_->cancel();
-
-    wait_for_services();    
-    request_switch_controllers();    
-    request_activate_servo();    
-    
-    timer_routine_->reset();
-    
+    timer_routine_->cancel();    
 }
 
 void moveit_servo_ur::request_activate_servo() {
@@ -145,7 +116,46 @@ void moveit_servo_ur::routine_callback()
         }
     }
 }
+void moveit_servo_ur::bottlePoseCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
+    if (goal_reached) {
+        // Stop processing new messages if the goal has been reached
+        return;
+    }
+    geometry_msgs::msg::Pose tar_msg;
+    tf2::Quaternion q;
+    q.setRPY(0.0, M_PI , M_PI);
+    tar_msg.orientation.x = q.x();
+    tar_msg.orientation.y = q.y();
+    tar_msg.orientation.z = q.z();
+    tar_msg.orientation.w = q.w();
+    tar_msg.position.x = msg->pose.position.x;//0.3;
+    tar_msg.position.y = msg->pose.position.y;//0.2;
+    tar_msg.position.z = msg->pose.position.z;//0.3;
+    auto const target_pose_1 = tar_msg;
+    auto success = false;
+    moveit::planning_interface::MoveGroupInterface::Plan planMessage;     
 
+    //Plan movement to point 1
+    move_group_interface->setPoseTarget(target_pose_1);
+    success = static_cast<bool>(move_group_interface->plan(planMessage));
+
+    //Execute movement to point 1
+    if (success) {
+    move_group_interface->execute(planMessage);    
+    } else {
+    std::cout<<"fail moving to point 1" << std::endl;
+    return;
+    }
+    
+    std::cout<<"finished moving to point 1" << std::endl;
+    goal_reached = true;
+    wait_for_services();    
+    request_switch_controllers();    
+    request_activate_servo();    
+    
+    timer_routine_->reset();
+    return;       
+    }
 
 
 
